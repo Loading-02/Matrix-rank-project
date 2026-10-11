@@ -7,7 +7,6 @@
 A mini project that models a set of database queries as a matrix and uses its **rank** to find redundant queries and to understand what the queries can (and cannot) reveal about the data.
 
 ---
-**Live demo:** https://loading-02.github.io/Matrix-rank-project/
 https://loading-02.github.io/Matrix-rank-project/matrix-rank-explorer.html
 
 ## Table of Contents
