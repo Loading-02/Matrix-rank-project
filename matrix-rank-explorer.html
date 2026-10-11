@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matrix Rank Explorer: Database Queries</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1f2328;--mut:#6b7280;--card:#fff;--bd:#d9d9d2;--ac:#2f6fdd;--ok:#1a7f4b;--bad:#b42318;--hl:#eef3fd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--fg:#e8e8e3;--mut:#9aa0a6;--card:#1d2024;--bd:#33373d;--ac:#6aa0ff;--ok:#4cc38a;--bad:#ff7b72;--hl:#222a3a}}
+:root[data-theme="dark"]{--bg:#15171a;--fg:#e8e8e3;--mut:#9aa0a6;--card:#1d2024;--bd:#33373d;--ac:#6aa0ff;--ok:#4cc38a;--bad:#ff7b72;--hl:#222a3a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.05rem;margin:0 0 10px}
+p.sub{color:var(--mut);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.scroll{overflow-x:auto}
+table.m{border-collapse:separate;border-spacing:4px}
+table.m th{font-weight:600;color:var(--mut);font-size:.85rem;padding:2px 6px}
+table.m input{width:64px;padding:6px;text-align:center;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+table.r td{min-width:64px;text-align:center;padding:6px;border:1px solid var(--bd);border-radius:6px;font-variant-numeric:tabular-nums}
+table.r{border-collapse:separate;border-spacing:4px}
+table.r td.p{background:var(--hl);font-weight:700}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--fg);cursor:pointer}
+button.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+label{color:var(--mut);font-size:.9rem}
+input.tol{width:100px;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+.big{font-size:2rem;font-weight:700}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+ul{margin:6px 0 0;padding-left:20px}
+code{background:var(--hl);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+<h1>Matrix Rank Explorer</h1>
+<p class="sub">Each row is a database query, each column a record. Edit the matrix to see its rank, the redundant queries, and what the queries cannot reveal.</p>
+
+<div class="card">
+<h2>1. Query matrix A</h2>
+<div class="scroll"><table class="m" id="mat"></table></div>
+<div class="row">
+<button id="addR">+ Query</button><button id="delR">- Query</button>
+<button id="addC">+ Record</button><button id="delC">- Record</button>
+<button id="ex1">Example: rank 3</button><button id="ex2">Example: full rank</button><button id="ex3">Example: near-dependent</button>
+</div>
+<div class="row"><label for="tol">Zero tolerance</label><input class="tol" id="tol" value="1e-9"><button class="pri" id="go">Compute rank</button></div>
+</div>
+
+<div class="card" id="out" hidden>
+<h2>2. Result</h2>
+<div><span class="big" id="rk"></span> <span id="rkmsg"></span></div>
+<h2 style="margin-top:16px">Reduced row echelon form (pivots highlighted)</h2>
+<div class="scroll"><table class="r" id="rref"></table></div>
+<h2 style="margin-top:16px">Query analysis</h2>
+<ul id="an"></ul>
+<h2 style="margin-top:16px">Null space (changes the queries cannot detect)</h2>
+<ul id="ns"></ul>
+</div>
+
+<div class="card">
+<h2>Notes for the report and viva</h2>
+<ul>
+<li>Rank = number of independent queries. A query that adds nothing to the earlier ones is redundant.</li>
+<li>rank + nullity = number of records. A nonzero nullity means the data cannot be recovered uniquely.</li>
+<li>Stability: try the near-dependent example. Change the tolerance from <code>1e-9</code> to <code>1e-13</code> and the computed rank changes, because a tiny pivot is either noise or real depending on the tolerance.</li>
+<li>This tool uses Gaussian elimination with partial pivoting. For serious work, SVD-based rank is more reliable.</li>
+</ul>
+</div>
+</main>
+<script>
+var A=[[1,1,0,0],[0,1,1,0],[1,2,1,0],[0,0,1,1],[1,1,1,1]];
+function build(){
+  var t=document.getElementById('mat'),h='<tr><th></th>';
+  for(var j=0;j<A[0].length;j++)h+='<th>x'+(j+1)+'</th>';
+  h+='</tr>';
+  for(var i=0;i<A.length;i++){h+='<tr><th>Q'+(i+1)+'</th>';
+    for(var j=0;j<A[0].length;j++)h+='<td><input data-i="'+i+'" data-j="'+j+'" value="'+A[i][j]+'" inputmode="decimal"></td>';
+    h+='</tr>';}
+  t.innerHTML=h;
+}
+function readA(){
+  var ins=document.querySelectorAll('#mat input');
+  ins.forEach(function(e){var v=parseFloat(e.value);A[+e.dataset.i][+e.dataset.j]=isNaN(v)?0:v;});
+}
+function fmt(x){var r=Math.round(x*1e6)/1e6;if(Object.is(r,-0))r=0;return Math.abs(x)>0&&Math.abs(x)<5e-7?x.toExponential(1):String(r);}
+function rref(M,tol){
+  var R=M.map(function(r){return r.slice();}),m=R.length,n=R[0].length,piv=[],row=0;
+  for(var c=0;c<n&&row<m;c++){
+    var best=row;
+    for(var i=row+1;i<m;i++)if(Math.abs(R[i][c])>Math.abs(R[best][c]))best=i;
+    if(Math.abs(R[best][c])<=tol)continue;
+    var tmp=R[row];R[row]=R[best];R[best]=tmp;
+    var p=R[row][c];
+    for(var j=0;j<n;j++)R[row][j]/=p;
+    for(var i2=0;i2<m;i2++)if(i2!==row){var f=R[i2][c];if(f!==0)for(var j2=0;j2<n;j2++)R[i2][j2]-=f*R[row][j2];}
+    piv.push(c);row++;
+  }
+  return {R:R,piv:piv};
+}
+function compute(){
+  readA();
+  var tol=parseFloat(document.getElementById('tol').value);if(isNaN(tol)||tol<0)tol=1e-9;
+  var res=rref(A,tol),r=res.piv.length,m=A.length,n=A[0].length;
+  document.getElementById('out').hidden=false;
+  document.getElementById('rk').textContent='rank = '+r;
+  var msg=document.getElementById('rkmsg');
+  msg.textContent=(r===Math.min(m,n))?'(full rank)':'(rank-deficient: max possible is '+Math.min(m,n)+')';
+  msg.className=(r===Math.min(m,n))?'ok':'bad';
+  var h='';
+  for(var i=0;i<m;i++){h+='<tr>';for(var j=0;j<n;j++){h+='<td'+(res.piv.indexOf(j)>-1&&i<r&&res.piv[i]===j?' class="p"':'')+'>'+fmt(res.R[i][j])+'</td>';}h+='</tr>';}
+  document.getElementById('rref').innerHTML=h;
+  var an=[],prev=0;
+  for(var q=0;q<m;q++){
+    var rk=rref(A.slice(0,q+1),tol).piv.length;
+    an.push(rk>prev?'Q'+(q+1)+': independent of the earlier queries':'Q'+(q+1)+': <b class="bad">redundant</b>, a combination of earlier queries');
+    prev=rk;
+  }
+  an.push('Independent queries: '+r+' of '+m+'. Redundant queries: '+(m-r)+'.');
+  document.getElementById('an').innerHTML=an.map(function(s){return '<li>'+s+'</li>';}).join('');
+  var free=[];for(var c=0;c<n;c++)if(res.piv.indexOf(c)<0)free.push(c);
+  var ns=[];
+  free.forEach(function(f){
+    var v=new Array(n).fill(0);v[f]=1;
+    res.piv.forEach(function(pc,k){v[pc]=-res.R[k][f];});
+    ns.push('('+v.map(fmt).join(', ')+')');
+  });
+  document.getElementById('ns').innerHTML=free.length
+    ? ns.map(function(s){return '<li>'+s+'</li>';}).join('')+'<li>nullity = '+free.length+', so the records cannot be recovered uniquely from these queries.</li>'
+    : '<li>Only the zero vector: the records can be recovered uniquely.</li>';
+}
+function set(M){A=M.map(function(r){return r.slice();});build();document.getElementById('out').hidden=true;}
+document.getElementById('go').onclick=compute;
+document.getElementById('addR').onclick=function(){readA();A.push(new Array(A[0].length).fill(0));build();};
+document.getElementById('delR').onclick=function(){readA();if(A.length>1)A.pop();build();};
+document.getElementById('addC').onclick=function(){readA();A.forEach(function(r){r.push(0);});build();};
+document.getElementById('delC').onclick=function(){readA();if(A[0].length>1)A.forEach(function(r){r.pop();});build();};
+document.getElementById('ex1').onclick=function(){set([[1,1,0,0],[0,1,1,0],[1,2,1,0],[0,0,1,1],[1,1,1,1]]);};
+document.getElementById('ex2').onclick=function(){set([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);};
+document.getElementById('ex3').onclick=function(){set([[1,1,0,0],[0,1,1,0],[1,2,1,1e-10],[0,0,1,1]]);};
+build();
+</script>
+</body>
+</html>
