@@ -8,6 +8,7 @@ A mini project that models a set of database queries as a matrix and uses its **
 
 ---
 **Live demo:** https://loading-02.github.io/Matrix-rank-project/
+https://loading-02.github.io/Matrix-rank-project/matrix-rank-explorer.html
 
 ## Table of Contents
 
